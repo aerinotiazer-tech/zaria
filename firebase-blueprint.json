@@ -1,0 +1,199 @@
+{
+  "entities": {
+    "Config": {
+      "title": "Application Configuration",
+      "description": "Global settings for the web app",
+      "type": "object",
+      "properties": {
+        "brandName": { "type": "string" },
+        "heroTitle1": { "type": "string" },
+        "heroTitle2": { "type": "string" },
+        "heroSubtitle": { "type": "string" },
+        "whatsappNumber": { "type": "string" },
+        "deliveryFee": { "type": "number" }
+      },
+      "required": ["brandName", "whatsappNumber"]
+    },
+    "Category": {
+      "title": "Menu Category",
+      "description": "Category for products",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "icon": { "type": "string" },
+        "color": { "type": "string" },
+        "textColor": { "type": "string" },
+        "orderId": { "type": "number" }
+      },
+      "required": ["name"]
+    },
+    "Product": {
+      "title": "Product Item",
+      "description": "A food item in the menu",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "oldPrice": { "type": "number" },
+        "image": { "type": "string" },
+        "badge": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "popular": { "type": "boolean" }
+      },
+      "required": ["name", "price", "image"]
+    },
+    "Order": {
+      "title": "Customer Order",
+      "description": "An order placed by a customer",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "total": { "type": "number" },
+        "items": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "preparing", "ready", "delivering", "completed", "canceled"]
+        },
+        "orderMode": { "type": "string" },
+        "posId": { "type": "string" },
+        "posName": { "type": "string" },
+        "driverLocation": {
+          "type": "object",
+          "properties": {
+            "lat": { "type": "number" },
+            "lng": { "type": "number" }
+          }
+        },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["customerName", "total", "status"]
+    },
+    "PointOfSale": {
+      "title": "Store Location",
+      "description": "A physical point of sale for the restaurant",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "phone": { "type": "string" },
+        "hours": { "type": "object" },
+        "priority": { "type": "number" },
+        "isOpen": { "type": "boolean" },
+        "district": { "type": "string" }
+      },
+      "required": ["name", "address", "lat", "lng"]
+    },
+    "Review": {
+      "title": "Customer Review",
+      "description": "Feedback from customers",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "isApproved": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["customerName", "rating"]
+    },
+    "ActivityLog": {
+      "title": "System Activity",
+      "description": "Log of admin actions",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "action": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "details": { "type": "string" }
+      },
+      "required": ["userId", "action", "timestamp"]
+    },
+    "Promo": {
+      "title": "Promotion",
+      "description": "Marketing promotions",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "discountType": { "type": "string", "enum": ["percent", "fixed"] },
+        "discountValue": { "type": "number" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "bannerImage": { "type": "string" }
+      },
+      "required": ["title", "isActive"]
+    },
+    "PageContent": {
+      "title": "Page Content",
+      "description": "CMS for static page content",
+      "type": "object",
+      "properties": {
+        "pageKey": { "type": "string" },
+        "sections": { "type": "array", "items": { "type": "object" } }
+      },
+      "required": ["pageKey"]
+    },
+    "Admin": {
+      "title": "Admin Role",
+      "description": "Admin access list",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/config/{configId}": {
+      "schema": { "$ref": "#/entities/Config" },
+      "description": "Store config, normally configId is just 'main'"
+    },
+    "/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "Product categories"
+    },
+    "/products/{productId}": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Menu products"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders"
+    },
+    "/points_of_sale/{posId}": {
+      "schema": { "$ref": "#/entities/PointOfSale" },
+      "description": "Store locations"
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/Review" },
+      "description": "Customer reviews"
+    },
+    "/activity_logs/{logId}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Admin activity logs"
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/Admin" },
+      "description": "RBAC verification for admins"
+    },
+    "/promos/{promoId}": {
+      "schema": { "$ref": "#/entities/Promo" },
+      "description": "Promotions"
+    },
+    "/page_content/{pageKey}": {
+      "schema": { "$ref": "#/entities/PageContent" },
+      "description": "CMS Page content"
+    }
+  }
+}

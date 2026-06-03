@@ -1,0 +1,205 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -- PRIMITIVES --
+    function isSignedIn() { return request.auth != null; }
+    function getUserRole() { 
+      let udoc = get(/databases/$(database)/documents/users/$(request.auth.uid));
+      return udoc != null ? udoc.data.role : null;
+    }
+    function isSuperAdmin() { 
+       return isSignedIn() && (getUserRole() in ['super_admin', 'SUPER_ADMIN'] || request.auth.token.email == 'beidoufadimatou1998@gmail.com'); 
+    }
+    function isAdmin() { return isSuperAdmin() || (isSignedIn() && getUserRole() in ['admin', 'ADMIN']); }
+    function isManager() { return isAdmin() || (isSignedIn() && getUserRole() in ['manager', 'MANAGER']); }
+    function isStaff() { return isManager() || (isSignedIn() && getUserRole() in ['staff', 'STAFF', 'editor', 'EDITOR']); }
+    function isEditor() { return isStaff(); }
+    function isDriver() { return isSuperAdmin() || (isSignedIn() && getUserRole() in ['driver', 'DRIVER']); }
+    function isViewer() { return isStaff() || (isSignedIn() && getUserRole() in ['viewer', 'VIEWER']); }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+
+    // -- USERS / RBAC --
+    function isValidUser(data) {
+      return data.keys().hasOnly(['email', 'role']) &&
+             data.email is string &&
+             data.role in ['super_admin', 'SUPER_ADMIN', 'admin', 'ADMIN', 'manager', 'MANAGER', 'staff', 'STAFF', 'editor', 'EDITOR', 'viewer', 'VIEWER'];
+    }
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (request.auth.uid == userId || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId && (
+         (request.auth.token.email == 'beidoufadimatou1998@gmail.com' && incoming().role == 'super_admin' && isValidUser(incoming())) ||
+         (incoming().role == 'viewer' && isValidUser(incoming())) ||
+         (isSuperAdmin() && isValidUser(incoming())) // fallback just in case
+      );
+      allow update: if isSuperAdmin() && isValidUser(incoming());
+      allow delete: if isSuperAdmin();
+    }
+
+    // -- CONFIG --
+    function isValidConfig(data) {
+      return data.keys().hasOnly(['brandName', 'heroTitle1', 'heroTitle2', 'heroSubtitle', 'whatsappNumber', 'deliveryFee', 'seoTitle', 'seoDesc', 'promoActive', 'promoText', 'isRestaurantOpen', 'customStatuses']) &&
+             (!data.keys().hasAny(['brandName']) || (data.brandName is string && data.brandName.size() <= 100)) &&
+             (!data.keys().hasAny(['promoActive']) || (data.promoActive is bool)) &&
+             (!data.keys().hasAny(['isRestaurantOpen']) || (data.isRestaurantOpen is bool)) &&
+             (!data.keys().hasAny(['whatsappNumber']) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 20));
+    }
+    match /config/{configId} {
+      allow get: if isValidId(configId);
+      allow list: if true;
+      allow create: if isAdmin() && isValidConfig(incoming()) && incoming().keys().hasAll(['brandName', 'whatsappNumber']);
+      allow update: if isAdmin() && isValidConfig(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // -- CATEGORIES --
+    function isValidCategory(data) {
+      return data.keys().hasOnly(['name', 'icon', 'color', 'textColor', 'orderId']) &&
+             (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() > 0 && data.name.size() <= 100));
+    }
+    match /categories/{categoryId} {
+      allow get: if isValidId(categoryId);
+      allow list: if true;
+      allow create: if isEditor() && isValidCategory(incoming()) && incoming().keys().hasAll(['name']);
+      allow update: if isEditor() && isValidCategory(incoming());
+      allow delete: if isEditor();
+    }
+
+    // -- PRODUCTS --
+    function isValidProduct(data) {
+      return data.keys().hasOnly(['name', 'description', 'price', 'oldPrice', 'image', 'badge', 'categoryId', 'popular', 'isAvailable']) &&
+             (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() > 0 && data.name.size() <= 150)) &&
+             (!data.keys().hasAny(['price']) || (data.price is number)) &&
+             (!data.keys().hasAny(['isAvailable']) || (data.isAvailable is bool)) &&
+             (!data.keys().hasAny(['image']) || (data.image is string && data.image.size() <= 4000000)); // Increased limit to 4MB for b64
+    }
+    match /products/{productId} {
+      allow get: if isValidId(productId);
+      allow list: if true;
+      allow create: if isEditor() && isValidProduct(incoming()) && incoming().keys().hasAll(['name', 'price']);
+      allow update: if isEditor() && isValidProduct(incoming());
+      allow delete: if isEditor();
+    }
+
+    // -- ORDERS --
+    function isValidOrder(data) {
+      return data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'timestamp', 'createdAt', 'etaMinutes', 'posId', 'posName', 'deliveryCoords', 'driverLocation', 'paymentMethod', 'paymentPhone', 'deliveryTime', 'driver', 'clientHasRated']) &&
+             (!data.keys().hasAny(['customerName']) || (data.customerName is string && data.customerName.size() <= 100)) &&
+             (!data.keys().hasAny(['address']) || (data.address is string && data.address.size() <= 300)) &&
+             (!data.keys().hasAny(['phone']) || (data.phone is string && data.phone.size() <= 30)) &&
+             (!data.keys().hasAny(['paymentPhone']) || (data.paymentPhone is string && data.paymentPhone.size() <= 30)) &&
+             (!data.keys().hasAny(['total']) || (data.total is number)) &&
+             (!data.keys().hasAny(['status']) || (data.status is string && data.status.size() <= 30)) &&
+             (!data.keys().hasAny(['deliveryCoords']) || (data.deliveryCoords is map)) &&
+             (!data.keys().hasAny(['driverLocation']) || (data.driverLocation is map)) &&
+             (!data.keys().hasAny(['driver']) || data.driver == null || (data.driver is map)) &&
+             (!data.keys().hasAny(['items']) || (data.items is list && data.items.size() <= 100)) &&
+             (!data.keys().hasAny(['clientHasRated']) || (data.clientHasRated is bool));
+    }
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && isSignedIn() && (isViewer() || existing().userId == request.auth.uid); 
+      allow list: if isSignedIn() && (isViewer() || existing().userId == request.auth.uid);
+      
+      allow create: if isSignedIn() && isValidOrder(incoming()) && incoming().keys().hasAll(['total', 'status']) && incoming().userId == request.auth.uid;
+      
+      allow update: if isSignedIn() && (isAdmin() || (isValidOrder(incoming()) && (
+        (isEditor() && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'driverLocation', 'driver'])) ||
+        // Client rating the order
+        (existing().status == 'completed' && existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['clientHasRated'])) ||
+        // Livreur taking charge from 'assigned' (driver was already set by manager)
+        (existing().keys().hasAll(['driver']) && existing().driver.id == request.auth.uid && incoming().status == 'delivering' && existing().status == 'assigned' && incoming().diff(existing()).affectedKeys().hasOnly(['status'])) ||
+        // Livreur updating location
+        (existing().keys().hasAll(['driver']) && existing().driver.id == request.auth.uid && incoming().driver.id == existing().driver.id && incoming().diff(existing()).affectedKeys().hasAll(['driverLocation']) && incoming().diff(existing()).affectedKeys().hasOnly(['driverLocation', 'status'])) ||
+        // Livreur marking as arrived
+        (existing().keys().hasAll(['driver']) && existing().driver.id == request.auth.uid && incoming().driver.id == existing().driver.id && incoming().status == 'arrived' && incoming().diff(existing()).affectedKeys().hasOnly(['status']))
+      )));
+      
+      allow delete: if isAdmin();
+    }
+
+    // -- POINTS OF SALE --
+    function isValidPOS(data) {
+      return data.keys().hasOnly(['name', 'address', 'lat', 'lng', 'phone', 'hours', 'priority', 'isOpen', 'district']) &&
+             data.name is string && data.name.size() <= 100 && 
+             data.lat is number && data.lng is number &&
+             (!data.keys().hasAny(['address']) || (data.address is string && data.address.size() <= 300)) &&
+             (!data.keys().hasAny(['phone']) || (data.phone is string && data.phone.size() <= 30));
+    }
+    match /points_of_sale/{posId} {
+      allow get: if isValidId(posId);
+      allow list: if true;
+      allow create: if isAdmin() && isValidPOS(incoming());
+      allow update: if isEditor() && isValidPOS(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // -- PROMOS --
+    function isValidPromo(data) {
+      return data.keys().hasOnly(['title', 'description', 'discountType', 'discountValue', 'startDate', 'endDate', 'isActive', 'bannerImage']) &&
+             (!data.keys().hasAny(['title']) || (data.title is string && data.title.size() > 0));
+    }
+    match /promos/{promoId} {
+      allow get: if isValidId(promoId);
+      allow list: if true;
+      allow create: if isEditor() && isValidPromo(incoming());
+      allow update: if isEditor() && isValidPromo(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // -- PAGE CONTENT --
+    function isValidPageContent(data) {
+      return data.keys().hasOnly(['pageKey', 'sections']);
+    }
+    match /page_content/{pageKey} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isEditor() && isValidPageContent(incoming());
+      allow update: if isEditor() && isValidPageContent(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // -- ACTIVITY LOGS --
+    match /activity_logs/{logId} {
+      allow get: if isSuperAdmin();
+      allow list: if isSuperAdmin();
+      allow create: if isSignedIn(); // Log any admin action
+      allow update, delete: if false; // Logs are immutable
+    }
+
+    // -- REVIEWS --
+    match /reviews/{reviewId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if true; // anyone can create a review (client or driver)
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // -- DRIVERS --
+    match /drivers/{driverId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isAdmin();
+      allow update: if true; // driver needs to mark themselves as online/offline
+      allow delete: if isAdmin();
+    }
+
+    // -- CALLBACKS --
+    match /callbacks/{callbackId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if true; // anyone can request a callback
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}
