@@ -27,9 +27,22 @@
       },
       "required": ["name"]
     },
+    "Collection": {
+      "title": "Lookbook Collection",
+      "description": "An editorial capsule collection",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "image": { "type": "string" },
+        "order": { "type": "number" },
+        "isFeatured": { "type": "boolean" }
+      },
+      "required": ["name"]
+    },
     "Product": {
       "title": "Product Item",
-      "description": "A food item in the menu",
+      "description": "A food item or luxury product in the menu",
       "type": "object",
       "properties": {
         "name": { "type": "string" },
@@ -39,6 +52,10 @@
         "image": { "type": "string" },
         "badge": { "type": "string" },
         "categoryId": { "type": "string" },
+        "collectionId": { "type": "string" },
+        "material": { "type": "string" },
+        "styleNotes": { "type": "string" },
+        "sizeGuide": { "type": "string" },
         "popular": { "type": "boolean" }
       },
       "required": ["name", "price", "image"]
@@ -152,6 +169,64 @@
         "role": { "type": "string" }
       },
       "required": ["email", "role"]
+    },
+    "User": {
+      "title": "Registered User",
+      "description": "System user with silhouette profiling and address list",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "stature": { "type": "number" },
+        "chest": { "type": "number" },
+        "waist": { "type": "number" },
+        "hips": { "type": "number" },
+        "addresses": { "type": "array", "items": { "type": "object" } },
+        "paymentMethods": { "type": "array", "items": { "type": "object" } }
+      },
+      "required": ["email", "role"]
+    },
+    "Callback": {
+      "title": "Callback Request",
+      "description": "Request from a customer to be called back by support",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "timeSlot": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["phone"]
+    },
+    "Driver": {
+      "title": "Delivery Driver",
+      "description": "A courier or driver associated with a POS",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "posId": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["name", "phone"]
+    },
+    "Reservation": {
+      "title": "Boutique Reservation",
+      "description": "Reservation of a personal shopper slot in a physical store",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "guests": { "type": "number" },
+        "posId": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["customerName", "phone", "date", "time"]
     }
   },
   "firestore": {
@@ -162,6 +237,10 @@
     "/categories/{categoryId}": {
       "schema": { "$ref": "#/entities/Category" },
       "description": "Product categories"
+    },
+    "/collections/{collectionId}": {
+      "schema": { "$ref": "#/entities/Collection" },
+      "description": "Seasonal lookbooks and capsule collections"
     },
     "/products/{productId}": {
       "schema": { "$ref": "#/entities/Product" },
@@ -187,6 +266,10 @@
       "schema": { "$ref": "#/entities/Admin" },
       "description": "RBAC verification for admins"
     },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Client profile & custom role"
+    },
     "/promos/{promoId}": {
       "schema": { "$ref": "#/entities/Promo" },
       "description": "Promotions"
@@ -194,6 +277,18 @@
     "/page_content/{pageKey}": {
       "schema": { "$ref": "#/entities/PageContent" },
       "description": "CMS Page content"
+    },
+    "/callbacks/{callbackId}": {
+      "schema": { "$ref": "#/entities/Callback" },
+      "description": "Client support callback requests"
+    },
+    "/drivers/{driverId}": {
+      "schema": { "$ref": "#/entities/Driver" },
+      "description": "Assigned store couriers"
+    },
+    "/reservations/{reservationId}": {
+      "schema": { "$ref": "#/entities/Reservation" },
+      "description": "Personal shopper scheduling"
     }
   }
 }

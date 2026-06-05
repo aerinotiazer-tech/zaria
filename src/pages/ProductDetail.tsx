@@ -121,11 +121,12 @@ export function PageProductDetail() {
               className="aspect-[3/4] w-full bg-gray-50 overflow-hidden relative group cursor-crosshair"
             >
               <motion.img 
-                initial={{ opacity: 0, scale: 1.02 }}
+                key={selectedColor || 'default'}
+                initial={{ opacity: 0.8, scale: 1.02 }}
                 animate={{ opacity: 1, scale: 1 }}
                 style={zoomStyle}
-                transition={{ duration: 0.8 }}
-                src={product.image} 
+                transition={{ duration: 0.5 }}
+                src={(selectedColor && (product as any).colorImages && (product as any).colorImages[selectedColor]) ? (product as any).colorImages[selectedColor] : product.image} 
                 alt={product.name} 
                 className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.5]"
               />
@@ -296,7 +297,7 @@ export function PageProductDetail() {
                 </button>
               </div>
 
-              {/* Expandable Technical Details (Composition, Origin) */}
+              {/* Expandable Technical Details (Composition, Origin, Style Notes) */}
               <div className="border-t border-gray-200 pt-6 space-y-1">
                 
                 {/* Composition */}
@@ -314,12 +315,45 @@ export function PageProductDetail() {
                       animate={{ opacity: 1, height: 'auto' }}
                       className="pt-4 text-[10px] font-sans tracking-widest uppercase text-gray-500 leading-relaxed space-y-3"
                     >
-                      <p>Tissu principal : 100% Lin biologique de qualité supérieure.</p>
-                      <p>Nous travaillons avec des programmes de suivi pour garantir le respect des normes sociales, environnementales et de sécurité de nos vêtements.</p>
+                      <p>Matière principale : {product.material || "100% Lin biologique de qualité supérieure."}</p>
+                      <p>Nous travaillons avec des programmes de suivi pour garantir le respect des normes de haute couture, sociales, environnementales et de sécurité de nos vêtements.</p>
                       <p className="border-l-2 border-black pl-3 text-black font-semibold">Prendre soin de vos vêtements, c'est prendre soin de l'environnement. Laver à basse température et programmer des essorages doux.</p>
                     </motion.div>
                   )}
                 </div>
+
+                {/* Style Notes */}
+                {(product.styleNotes || product.sizeGuide) && (
+                  <div className="border-b border-gray-100 pb-4">
+                    <button 
+                      onClick={() => toggleSection('stylenotes')} 
+                      className="w-full flex justify-between items-center text-left py-2 font-display text-[11px] uppercase tracking-[0.2em] text-black hover:opacity-75 transition-opacity"
+                    >
+                      <span>Conseils de Style & Guide Coupe</span>
+                      {openSection === 'stylenotes' ? <ChevronUp className="w-4 h-4 stroke-[1]" /> : <ChevronDown className="w-4 h-4 stroke-[1]" />}
+                    </button>
+                    {openSection === 'stylenotes' && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="pt-4 text-[10px] font-sans tracking-widest uppercase text-gray-500 leading-relaxed space-y-3"
+                      >
+                        {product.styleNotes && (
+                          <div>
+                            <span className="font-extrabold text-black block mb-1">ALLURE ET CONSEILS DE STYLE :</span>
+                            <p className="normal-case text-gray-600 font-medium">{product.styleNotes}</p>
+                          </div>
+                        )}
+                        {product.sizeGuide && (
+                          <div>
+                            <span className="font-extrabold text-black block mb-1">NOTES DE COUPE & TAILLES :</span>
+                            <p className="normal-case text-gray-600 font-medium">{product.sizeGuide}</p>
+                          </div>
+                        )}
+                      </motion.div>
+                    )}
+                  </div>
+                )}
 
                 {/* Shipping info */}
                 <div className="border-b border-gray-100 pb-4">

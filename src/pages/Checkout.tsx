@@ -230,8 +230,8 @@ export function PageCheckout() {
                 <span className="block text-[10px] uppercase tracking-[0.2em] font-extrabold mb-1">Règlement à la livraison</span>
                 <span className="block text-[9px] uppercase tracking-[0.16em] text-neutral-300 leading-normal font-medium">
                   {confirmedOrder.paymentMethod === 'cash' 
-                    ? 'Paiement en espèces auprès de notre livreur partenaire lors de la livraison.' 
-                    : `Règlement à effectuer en direct en mobile money par ${confirmedOrder.paymentMethod.toUpperCase()} à la livraison.`}
+                    ? 'Paiement en espèces auprès de notre Chauffeur Privé lors de la remise en mains propres de votre coffret.' 
+                    : `Règlement à effectuer par mobile money (${confirmedOrder.paymentMethod.toUpperCase()}) auprès de notre Chauffeur Privé lors de la réception.`}
                 </span>
               </div>
             </div>

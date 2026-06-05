@@ -58,3 +58,42 @@ body {
   height: 100%;
   z-index: 10;
 }
+
+/* --- LIQUID GLASS GLASSMORPHISM STYLE SETS --- */
+.liquid-glass-container {
+  background: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(20px) saturate(190%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(190%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4) !important;
+  box-shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.03), inset 0 1px 1px 0 rgba(255, 255, 255, 0.45) !important;
+}
+
+.liquid-glass-card {
+  background: rgba(255, 255, 255, 0.55) !important;
+  backdrop-filter: blur(24px) saturate(210%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(210%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.5) !important;
+  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.04), inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.5) !important;
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.liquid-glass-card:hover {
+  background: rgba(255, 255, 255, 0.75) !important;
+  border-color: rgba(255, 255, 255, 0.65) !important;
+  box-shadow: 0 24px 50px -10px rgba(0, 0, 0, 0.08), inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.6) !important;
+  transform: translateY(-4px);
+}
+
+.liquid-glass-badge {
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+}
+
+.liquid-glass-navbar {
+  background: rgba(255, 255, 255, 0.65) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3) !important;
+}

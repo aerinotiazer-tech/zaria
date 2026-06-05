@@ -14,14 +14,14 @@ service cloud.firestore {
       return udoc != null ? udoc.data.role : null;
     }
     function isSuperAdmin() { 
-       return isSignedIn() && (getUserRole() in ['super_admin', 'SUPER_ADMIN'] || request.auth.token.email == 'beidoufadimatou1998@gmail.com'); 
+       return isSignedIn() && (request.auth.token.email == 'beidoufadimatou1998@gmail.com' || request.auth.token.email == 'aerinotiazer@gmail.com' || (getUserRole() != null && getUserRole() in ['super_admin', 'SUPER_ADMIN'])); 
     }
-    function isAdmin() { return isSuperAdmin() || (isSignedIn() && getUserRole() in ['admin', 'ADMIN']); }
-    function isManager() { return isAdmin() || (isSignedIn() && getUserRole() in ['manager', 'MANAGER']); }
-    function isStaff() { return isManager() || (isSignedIn() && getUserRole() in ['staff', 'STAFF', 'editor', 'EDITOR']); }
+    function isAdmin() { return isSuperAdmin() || (isSignedIn() && getUserRole() != null && getUserRole() in ['admin', 'ADMIN']); }
+    function isManager() { return isAdmin() || (isSignedIn() && getUserRole() != null && getUserRole() in ['manager', 'MANAGER']); }
+    function isStaff() { return isManager() || (isSignedIn() && getUserRole() != null && getUserRole() in ['staff', 'STAFF', 'editor', 'EDITOR']); }
     function isEditor() { return isStaff(); }
-    function isDriver() { return isSuperAdmin() || (isSignedIn() && getUserRole() in ['driver', 'DRIVER']); }
-    function isViewer() { return isStaff() || (isSignedIn() && getUserRole() in ['viewer', 'VIEWER']); }
+    function isDriver() { return isSuperAdmin() || (isSignedIn() && getUserRole() != null && getUserRole() in ['driver', 'DRIVER']); }
+    function isViewer() { return isStaff() || (isSignedIn() && getUserRole() != null && getUserRole() in ['viewer', 'VIEWER']); }
 
     function incoming() { return request.resource.data; }
     function existing() { return resource.data; }
@@ -29,15 +29,22 @@ service cloud.firestore {
 
     // -- USERS / RBAC --
     function isValidUser(data) {
-      return data.keys().hasOnly(['email', 'role']) &&
-             data.email is string &&
-             data.role in ['super_admin', 'SUPER_ADMIN', 'admin', 'ADMIN', 'manager', 'MANAGER', 'staff', 'STAFF', 'editor', 'EDITOR', 'viewer', 'VIEWER'];
+      return data.keys().hasAll(['email', 'role']) &&
+             (!data.keys().hasAny(['email']) || data.email is string) &&
+             data.role in ['super_admin', 'SUPER_ADMIN', 'admin', 'ADMIN', 'manager', 'MANAGER', 'staff', 'STAFF', 'editor', 'EDITOR', 'viewer', 'VIEWER'] &&
+             (!data.keys().hasAny(['createdAt']) || data.createdAt is string) &&
+             (!data.keys().hasAny(['stature']) || data.stature is number) &&
+             (!data.keys().hasAny(['chest']) || data.chest is number) &&
+             (!data.keys().hasAny(['waist']) || data.waist is number) &&
+             (!data.keys().hasAny(['hips']) || data.hips is number) &&
+             (!data.keys().hasAny(['addresses']) || data.addresses is list) &&
+             (!data.keys().hasAny(['paymentMethods']) || data.paymentMethods is list);
     }
     match /users/{userId} {
       allow get: if isValidId(userId) && (request.auth.uid == userId || isSuperAdmin());
       allow list: if isSuperAdmin();
       allow create: if isSignedIn() && request.auth.uid == userId && (
-         (request.auth.token.email == 'beidoufadimatou1998@gmail.com' && incoming().role == 'super_admin' && isValidUser(incoming())) ||
+         ((request.auth.token.email == 'beidoufadimatou1998@gmail.com' || request.auth.token.email == 'aerinotiazer@gmail.com') && incoming().role == 'super_admin' && isValidUser(incoming())) ||
          (incoming().role == 'viewer' && isValidUser(incoming())) ||
          (isSuperAdmin() && isValidUser(incoming())) // fallback just in case
       );
@@ -47,10 +54,8 @@ service cloud.firestore {
 
     // -- CONFIG --
     function isValidConfig(data) {
-      return data.keys().hasOnly(['brandName', 'heroTitle1', 'heroTitle2', 'heroSubtitle', 'whatsappNumber', 'deliveryFee', 'seoTitle', 'seoDesc', 'promoActive', 'promoText', 'isRestaurantOpen', 'customStatuses']) &&
-             (!data.keys().hasAny(['brandName']) || (data.brandName is string && data.brandName.size() <= 100)) &&
+      return (!data.keys().hasAny(['brandName']) || (data.brandName is string && data.brandName.size() <= 100)) &&
              (!data.keys().hasAny(['promoActive']) || (data.promoActive is bool)) &&
-             (!data.keys().hasAny(['isRestaurantOpen']) || (data.isRestaurantOpen is bool)) &&
              (!data.keys().hasAny(['whatsappNumber']) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 20));
     }
     match /config/{configId} {
@@ -63,8 +68,7 @@ service cloud.firestore {
 
     // -- CATEGORIES --
     function isValidCategory(data) {
-      return data.keys().hasOnly(['name', 'icon', 'color', 'textColor', 'orderId']) &&
-             (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() > 0 && data.name.size() <= 100));
+      return (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() > 0 && data.name.size() <= 100));
     }
     match /categories/{categoryId} {
       allow get: if isValidId(categoryId);
@@ -74,10 +78,23 @@ service cloud.firestore {
       allow delete: if isEditor();
     }
 
+    // -- COLLECTIONS --
+    function isValidCollection(data) {
+      return (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() > 0 && data.name.size() <= 100)) &&
+             (!data.keys().hasAny(['description']) || data.description is string) &&
+             (!data.keys().hasAny(['image']) || data.image is string);
+    }
+    match /collections/{collectionId} {
+      allow get: if isValidId(collectionId);
+      allow list: if true;
+      allow create: if isEditor() && isValidCollection(incoming()) && incoming().keys().hasAll(['name']);
+      allow update: if isEditor() && isValidCollection(incoming());
+      allow delete: if isEditor();
+    }
+
     // -- PRODUCTS --
     function isValidProduct(data) {
-      return data.keys().hasOnly(['name', 'description', 'price', 'oldPrice', 'image', 'badge', 'categoryId', 'popular', 'isAvailable']) &&
-             (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() > 0 && data.name.size() <= 150)) &&
+      return (!data.keys().hasAny(['name']) || (data.name is string && data.name.size() > 0 && data.name.size() <= 150)) &&
              (!data.keys().hasAny(['price']) || (data.price is number)) &&
              (!data.keys().hasAny(['isAvailable']) || (data.isAvailable is bool)) &&
              (!data.keys().hasAny(['image']) || (data.image is string && data.image.size() <= 4000000)); // Increased limit to 4MB for b64
@@ -92,8 +109,7 @@ service cloud.firestore {
 
     // -- ORDERS --
     function isValidOrder(data) {
-      return data.keys().hasOnly(['id', 'orderNumber', 'userId', 'customerName', 'address', 'phone', 'total', 'items', 'status', 'orderMode', 'timestamp', 'createdAt', 'etaMinutes', 'posId', 'posName', 'deliveryCoords', 'driverLocation', 'paymentMethod', 'paymentPhone', 'deliveryTime', 'driver', 'clientHasRated']) &&
-             (!data.keys().hasAny(['customerName']) || (data.customerName is string && data.customerName.size() <= 100)) &&
+      return (!data.keys().hasAny(['customerName']) || (data.customerName is string && data.customerName.size() <= 100)) &&
              (!data.keys().hasAny(['address']) || (data.address is string && data.address.size() <= 300)) &&
              (!data.keys().hasAny(['phone']) || (data.phone is string && data.phone.size() <= 30)) &&
              (!data.keys().hasAny(['paymentPhone']) || (data.paymentPhone is string && data.paymentPhone.size() <= 30)) &&
@@ -128,8 +144,7 @@ service cloud.firestore {
 
     // -- POINTS OF SALE --
     function isValidPOS(data) {
-      return data.keys().hasOnly(['name', 'address', 'lat', 'lng', 'phone', 'hours', 'priority', 'isOpen', 'district']) &&
-             data.name is string && data.name.size() <= 100 && 
+      return data.name is string && data.name.size() <= 100 && 
              data.lat is number && data.lng is number &&
              (!data.keys().hasAny(['address']) || (data.address is string && data.address.size() <= 300)) &&
              (!data.keys().hasAny(['phone']) || (data.phone is string && data.phone.size() <= 30));
@@ -144,8 +159,7 @@ service cloud.firestore {
 
     // -- PROMOS --
     function isValidPromo(data) {
-      return data.keys().hasOnly(['title', 'description', 'discountType', 'discountValue', 'startDate', 'endDate', 'isActive', 'bannerImage']) &&
-             (!data.keys().hasAny(['title']) || (data.title is string && data.title.size() > 0));
+      return (!data.keys().hasAny(['title']) || (data.title is string && data.title.size() > 0));
     }
     match /promos/{promoId} {
       allow get: if isValidId(promoId);
@@ -157,7 +171,7 @@ service cloud.firestore {
 
     // -- PAGE CONTENT --
     function isValidPageContent(data) {
-      return data.keys().hasOnly(['pageKey', 'sections']);
+      return true; // We relax structure for pages since blocks structure may vary wildly
     }
     match /page_content/{pageKey} {
       allow get: if true;
@@ -200,6 +214,23 @@ service cloud.firestore {
       allow create: if true; // anyone can request a callback
       allow update: if isAdmin();
       allow delete: if isAdmin();
+    }
+
+    // -- RESERVATIONS --
+    function isValidReservation(data) {
+      return (!data.keys().hasAny(['customerName']) || (data.customerName is string && data.customerName.size() <= 100)) &&
+             (!data.keys().hasAny(['phone']) || (data.phone is string && data.phone.size() <= 100)) &&
+             (!data.keys().hasAny(['date']) || (data.date is string)) &&
+             (!data.keys().hasAny(['time']) || (data.time is string)) &&
+             (!data.keys().hasAny(['guests']) || (data.guests is number)) &&
+             (!data.keys().hasAny(['status']) || (data.status is string && data.status in ['pending', 'confirmed', 'rejected', 'completed']));
+    }
+    match /reservations/{reservationId} {
+      allow get: if isValidId(reservationId) && isEditor();
+      allow list: if isEditor();
+      allow create: if isValidReservation(incoming()) && incoming().keys().hasAll(['customerName', 'phone', 'date', 'time']);
+      allow update: if isEditor() && isValidReservation(incoming());
+      allow delete: if isEditor();
     }
   }
 }

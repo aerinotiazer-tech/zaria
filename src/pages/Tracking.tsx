@@ -174,8 +174,8 @@ export function PageTracking() {
               <span className="block text-[10px] uppercase tracking-[0.2em] font-extrabold mb-1">Règlement à la livraison</span>
               <span className="block text-[9px] uppercase tracking-[0.16em] text-neutral-300 leading-normal font-medium">
                 {order.paymentMethod === 'cash' 
-                  ? 'Paiement en espèces auprès de notre livreur partenaire lors de la livraison.' 
-                  : `Règlement à effectuer en direct en mobile money par ${order.paymentMethod ? order.paymentMethod.toUpperCase() : 'MVOLA'} lors du contact de livraison.`}
+                  ? 'Paiement en espèces auprès de notre Chauffeur Privé lors de la remise en mains propres.' 
+                  : `Règlement à effectuer par mobile money (${order.paymentMethod ? order.paymentMethod.toUpperCase() : 'MVOLA'}) auprès de notre Chauffeur Privé lors de la réception.`}
               </span>
             </div>
           </div>
@@ -192,7 +192,7 @@ export function PageTracking() {
             rel="noreferrer"
             className="w-full text-center bg-black hover:bg-neutral-900 text-white border border-black uppercase tracking-[0.22em] py-4 hover:opacity-90 transition-all font-semibold text-xs"
           >
-            Confirmer la livraison de ma commande sur WhatsApp
+            Suivre ma livraison d'Exception sur WhatsApp
           </a>
           
           <button 

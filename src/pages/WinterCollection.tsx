@@ -144,7 +144,11 @@ export default function PageWinterCollection() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ duration: 0.6, delay: idx * 0.05 }}
-                  className="group flex flex-col bg-neutral-900 border border-white/5 overflow-hidden shadow-lg hover:border-white/20 transition-all p-3"
+                  className={`group flex flex-col p-3 overflow-hidden transition-all ${
+                    globalConfig?.enableLiquidGlass 
+                      ? 'liquid-glass-dark-card rounded-2xl hover:border-white/30 hover:scale-[1.01]' 
+                      : 'bg-neutral-900 border border-white/5 shadow-lg hover:border-white/20'
+                  }`}
                 >
                   {/* Photo Frame */}
                   <Link to={`/product/${p.id}`} className="relative aspect-[3/4] bg-neutral-800 overflow-hidden block">

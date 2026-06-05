@@ -3,8 +3,9 @@ import { useAdmin } from './AdminContext';
 import { useFirestore } from '../hooks/useFirestore';
 import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Save, Database, CloudLightning, Image as ImageIcon, MapPin, Sparkles, CheckSquare, Square } from 'lucide-react';
+import { Save, Database, CloudLightning, Image as ImageIcon, MapPin, Sparkles, CheckSquare, Square, Download, Activity } from 'lucide-react';
 import ImageDropZone from '../components/ImageDropZone';
+import { PRODUCTS } from '../App';
 
 export default function AdminSettings() {
   const { role } = useAdmin();
@@ -14,6 +15,7 @@ export default function AdminSettings() {
   
   const [formData, setFormData] = useState<any>(null);
   const [saving, setSaving] = useState(false);
+  const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
     const defaultData = {
@@ -21,6 +23,7 @@ export default function AdminSettings() {
       whatsappNumber: '+261340000000',
       deliveryFee: 2000,
       isBoutiqueOpen: true,
+      enableLiquidGlass: true,
       promoActive: false,
       promoText: '',
       heroTitle1: 'Méga',
@@ -50,6 +53,90 @@ export default function AdminSettings() {
       setFormData(defaultData);
     }
   }, [configData, loading]);
+
+  const handleImportAllDemoData = async () => {
+    if (!window.confirm("IMPORTANT: Cela va importer et synchroniser tous les produits, catégories de démo, collections et points de vente dans votre base Firestore. Continuer ?")) return;
+    setSeeding(true);
+    try {
+      // 1. Categories
+      const categoriesToImport = [
+        { id: '1', name: 'Femme', icon: '👗', color: 'bg-gray-100', text: 'text-black', order: 1 },
+        { id: '2', name: 'Homme', icon: '👔', color: 'bg-gray-100', text: 'text-black', order: 2 },
+        { id: '3', name: 'Enfant', icon: '🧸', color: 'bg-gray-100', text: 'text-black', order: 3 },
+        { id: '4', name: 'Chaussures', icon: '👠', color: 'bg-gray-100', text: 'text-black', order: 4 },
+        { id: '5', name: 'Accessoires', icon: '👜', color: 'bg-gray-100', text: 'text-black', order: 5 },
+        { id: '6', name: 'Parfum', icon: '✨', color: 'bg-gray-100', text: 'text-black', order: 6 }
+      ];
+      for (const cat of categoriesToImport) {
+        await setDoc(doc(db, 'categories', cat.id), cat);
+      }
+
+      // 2. Collections
+      const collectionsToImport = [
+        { id: 'col1', name: 'Nouvelle Collection ÉTÉ 2026', description: 'Légèreté et élégance inspirées des brises méditerranéennes.', order: 1, isFeatured: true, image: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80' },
+        { id: 'col2', name: 'Essentiels Minimalistes', description: 'Des pièces intemporelles de haute confection adaptées au quotidien.', order: 2, isFeatured: true, image: 'https://images.unsplash.com/photo-1434389678369-182fc23900ca?w=800&q=80' },
+        { id: 'col3', name: 'Collection d\'Hiver', description: 'Laines nobles, blazers croisés et manteaux structurés.', order: 3, isFeatured: false, image: 'https://images.unsplash.com/photo-1548123304-9462700a30f3?w=800&q=80' }
+      ];
+      for (const col of collectionsToImport) {
+        await setDoc(doc(db, 'collections', col.id), col);
+      }
+
+      // 3. Products
+      for (const p of PRODUCTS) {
+        await setDoc(doc(db, 'products', p.id), {
+          ...p,
+          isAvailable: true,
+          colorImages: (p as any).colorImages || {}
+        });
+      }
+
+      // 4. Boutiques / Points Of Sale
+      const boutiquesToImport = [
+        { id: 'pos1', name: "ZARIA Antananarivo - Ivandry Plaza", address: "Plaza Ivandry, Antananarivo, Madagascar", distance: "0.8 km", status: "Ouvert jusqu'à 18h30", phone: "034 11 222 33", type: "Maison de Couture", lat: -18.878, lng: 47.525, priority: 1, isOpen: true },
+        { id: 'pos2', name: "ZARIA Antananarivo - Ankorondrano", address: "Immeuble Standard, Ankorondrano, Antananarivo", distance: "2.1 km", status: "Ouvert jusqu'à 19h", phone: "034 22 345 67", type: "Boutique", lat: -18.892, lng: 47.521, priority: 2, isOpen: true },
+        { id: 'pos3', name: "ZARIA Tamatave - Boulevard de la Marne", address: "Boulevard de la Marne, Toamasina, Madagascar", distance: "1.2 km", status: "Ouvert jusqu'à 18h", phone: "032 44 567 89", type: "Boutique", lat: -18.149, lng: 49.402, priority: 3, isOpen: true },
+        { id: 'pos4', name: "ZARIA Paris Champs-Élysées", address: "Avenue des Champs-Élysées, Paris", distance: "0.5 km", status: "Ouvert jusqu'à 20h", phone: "01 23 45 67 89", type: "Boutique Principale", lat: 48.868, lng: 2.300, priority: 4, isOpen: true },
+        { id: 'pos5', name: "ZARIA Dakar Plateau", address: "Avenue Pompidou, Dakar", distance: "1.2 km", status: "Ouvert jusqu'à 19h", phone: "77 000 00 10", type: "Boutique", lat: 14.673, lng: -17.436, priority: 5, isOpen: true }
+      ];
+      for (const pos of boutiquesToImport) {
+        await setDoc(doc(db, 'points_of_sale', pos.id), pos);
+      }
+
+      // 5. Default config
+      const configDemo = {
+        brandName: 'ZARIA',
+        whatsappNumber: '+261340000000',
+        deliveryFee: 2000,
+        isBoutiqueOpen: true,
+        enableLiquidGlass: true,
+        promoActive: false,
+        promoText: '',
+        heroTitle1: 'Méga',
+        heroTitle2: 'ZARIA',
+        heroSubtitle: "Le vêtement le plus attendu de l'année.",
+        campaignImage: "https://images.unsplash.com/photo-1509631179647-0177331693ae?w=1600&q=100",
+        femmeImage: "https://images.unsplash.com/photo-1483985988355-763728e1935b?w=1400&q=80",
+        hommeImage: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=1400&q=80",
+        connexionImage: "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=1200&q=80",
+        collectionHeaderImage: "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=1600&q=82",
+        winterHeaderImage: "https://images.unsplash.com/photo-1548123304-9462700a30f3?w=1600&q=85",
+        studioTitle: "Le Studio des Styles",
+        studioSubtitle: "Associez les silhouettes de nos collections respectives.",
+        hotspotHautId: "p5",
+        hotspotBasId: "p6",
+        hotspotAccessoireId: "p1",
+        studioTopIds: ["p5", "p4", "p2"],
+        studioBottomIds: ["p6", "p1", "p3"]
+      };
+      await setDoc(doc(db, 'config', 'global'), configDemo);
+      setFormData(configDemo);
+      alert("Toutes les données de démonstration globales ont été injectées correctement !");
+    } catch (e: any) {
+      alert("Erreur: " + e.message);
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   if (loading || !formData) return <div className="font-bold text-gray-500">Chargement...</div>;
 
@@ -149,6 +236,31 @@ export default function AdminSettings() {
               <input type="checkbox" name="isBoutiqueOpen" checked={formData.isBoutiqueOpen ?? true} onChange={handleChange} className="w-4 h-4 accent-[#DA291C]"/>
               <span className="font-bold text-xs text-gray-700">Prendre les commandes</span>
             </label>
+
+            <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-100 bg-gray-50 rounded-none mt-2">
+              <input type="checkbox" name="enableLiquidGlass" checked={formData.enableLiquidGlass ?? true} onChange={handleChange} className="w-4 h-4 accent-[#DA291C]"/>
+              <span className="font-bold text-xs text-gray-700">Style Liquid Glass (Givré/Premium) 💎</span>
+            </label>
+          </div>
+
+          {/* EMERGENCY SYSTEM DATA SEEDER CARD */}
+          <div className="bg-red-50/50 p-6 border border-red-100 shadow-sm space-y-4">
+            <h2 className="font-black text-red-900 mb-2 border-b border-red-100/60 pb-2 flex items-center gap-2">
+              <Database className="w-5 h-5 text-red-700" />
+              <span>Données de Démo & Base</span>
+            </h2>
+            <p className="text-[11px] text-red-800 font-semibold leading-relaxed">
+              Vous avez importé un site vierge ou vidé vos collections Firebase ? Cliquez ci-dessous pour importer d'un coup de baguette magique tous les produits, catégories de démo, points de vente et collections éditables.
+            </p>
+            <button
+              type="button"
+              onClick={handleImportAllDemoData}
+              disabled={seeding}
+              className="w-full bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold py-3 px-4 text-xs uppercase tracking-widest rounded-none transition-colors border-2 border-transparent flex items-center justify-center gap-2 shadow"
+            >
+              <Download className="w-4 h-4" />
+              <span>{seeding ? "Importation générale..." : "Importer tout le Mode Démo"}</span>
+            </button>
           </div>
 
           <div className="bg-white p-6 border border-gray-100 shadow-sm space-y-4">

@@ -3,17 +3,18 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
-// Initialize Firebase App
+// Initialize Firebase App using the environment's provisioned config
 const app = initializeApp(firebaseConfig);
 
-// Explicitly initialize Firestore with the correct firestoreDatabaseId provided in the configuration
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); 
+// Explicitly initialize Firestore using the specific database ID or default instance
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId || '(default)');
 export const auth = getAuth(app);
 
 // Metadata catalog of known existing collections in the Zaria database schema
 export const VALID_COLLECTIONS = [
   'config',
   'categories',
+  'collections',
   'products',
   'orders',
   'points_of_sale',

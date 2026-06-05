@@ -55,8 +55,15 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  
+  console.error('[Firestore]', errInfo.error, 'Path:', errInfo.path);
+
+  // Instead of throwing an error which crashes the app context when running inside onSnapshot callbacks,
+  // we just log it and gracefully degrade the data hook.
+  // If a component explicitly requires error catching for UI (like login), it should use try/catch over the async method.
+  if (operationType !== OperationType.GET && operationType !== OperationType.LIST) {
+      throw new Error(JSON.stringify(errInfo));
+  }
 }
 
 export function useFirestore(colName: string, orderField: string = 'name', docId?: string, limitDocs?: number) {

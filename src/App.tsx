@@ -120,7 +120,28 @@ const COUNTRIES = {
   SN: { id: 'SN', name: 'Sénégal', flag: '🇸🇳', currency: 'XOF', phone: '+221 77 000 00 00', rate: 655.957, thresholdAmount: 35000, shortName: 'Sénégal' }
 };
 
-type ProductInfo = typeof PRODUCTS[0];
+interface ProductInfo {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  oldPrice?: number;
+  image: string;
+  categoryId: string;
+  collectionId?: string;
+  material?: string;
+  styleNotes?: string;
+  sizeGuide?: string;
+  badge?: string;
+  popular?: boolean;
+  type?: string;
+  sizes?: string[];
+  colors?: string[];
+  pointures?: string[];
+  flacons?: string[];
+  isAvailable?: boolean;
+}
+
 type CartItem = { 
   id: string; 
   product: ProductInfo; 
@@ -157,12 +178,14 @@ interface CartContextType {
   whatsappNumber: string;
   isLoggedIn: boolean;
   setIsLoggedIn: (b: boolean) => void;
+  currentUserData: any;
   activeOrder: any;
   setActiveOrder: (order: any) => void;
   clearCart: () => void;
   // Dynamic Global Data
   globalProducts: ProductInfo[];
   globalCategories: any[];
+  globalCollections: any[];
   globalConfig: any;
   globalPOS: any[];
   selectedPOS: any | null;
@@ -228,6 +251,32 @@ export default function App() {
   const [lastAdded, setLastAdded] = useState<string | null>(null);
   const [country, setCountry] = useState<keyof typeof COUNTRIES>('MG');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUserData, setCurrentUserData] = useState<any>(null); // We will also fetch user doc
+  
+  useEffect(() => {
+    // Dynamically import onAuthStateChanged to avoid bundle size issues early
+    import('firebase/auth').then(({ onAuthStateChanged }) => {
+       import('./firebase').then(({ auth, db }) => {
+         import('firebase/firestore').then(({ doc, getDoc }) => {
+            onAuthStateChanged(auth, async (user) => {
+              if (user) {
+                setIsLoggedIn(true);
+                // fetch user data
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                  setCurrentUserData({ uid: user.uid, ...userDoc.data() });
+                } else {
+                  setCurrentUserData({ uid: user.uid, email: user.email });
+                }
+              } else {
+                setIsLoggedIn(false);
+                setCurrentUserData(null);
+              }
+            });
+         });
+       });
+    });
+  }, []);
   const [activeOrder, setActiveOrder] = useState<any>(() => {
     if (typeof window !== 'undefined') {
       const savedOrder = localStorage.getItem('zaria_active_order');
@@ -255,11 +304,13 @@ export default function App() {
   const { data: globalCategoriesData } = useFirestore('categories', 'orderId');
   const { data: globalConfigData } = useFirestore('config', 'brandName');
   const { data: globalPOSData } = useFirestore('points_of_sale', 'name');
+  const { data: globalCollectionsData } = useFirestore('collections', 'order');
 
   const globalProducts = (globalProductsData && globalProductsData.length > 0) ? globalProductsData : PRODUCTS;
   const globalCategories = (globalCategoriesData && globalCategoriesData.length > 0) ? globalCategoriesData : CATEGORIES;
   const globalConfig = (globalConfigData && globalConfigData.length > 0) ? globalConfigData[0] : null;
   const globalPOS = (globalPOSData && globalPOSData.length > 0) ? globalPOSData : RESTAURANTS;
+  const globalCollections = (globalCollectionsData && globalCollectionsData.length > 0) ? globalCollectionsData : [];
 
   // Find nearest POS if not already selected manually when both coords and pos data are available
   useEffect(() => {
@@ -385,7 +436,7 @@ export default function App() {
   const whatsappLink = `https://wa.me/${whatsappNumber}?text=Bonjour,%20je%20souhaite%20commander.`;
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, updateCartItemInfo, clearCart, getCartCount, getCartTotal, selectedProduct, setSelectedProduct, editingCartItem, setEditingCartItem, isCartOpen, setIsCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, isLoggedIn, setIsLoggedIn, activeOrder, setActiveOrder, globalProducts, globalCategories, globalConfig, globalPOS, selectedPOS, setSelectedPOS, userCoords }}>
+    <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, updateCartItemInfo, clearCart, getCartCount, getCartTotal, selectedProduct, setSelectedProduct, editingCartItem, setEditingCartItem, isCartOpen, setIsCartOpen, lastAdded, country, setCountry, formatPriceC, whatsappLink, whatsappNumber, isLoggedIn, setIsLoggedIn, currentUserData, activeOrder, setActiveOrder, globalProducts, globalCategories, globalCollections, globalConfig, globalPOS, selectedPOS, setSelectedPOS, userCoords }}>
       <Router>
         <AppWithRouter />
       </Router>
@@ -413,7 +464,43 @@ export function PageConnexion() {
     }
   }, [isLoggedIn, navigate, redirectTarget]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleGoogleLogin = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const { signInWithPopup, GoogleAuthProvider } = await import('firebase/auth');
+      const { auth, db } = await import('./firebase');
+      const { doc, getDoc, setDoc } = await import('firebase/firestore');
+      
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      
+      const userDocRef = doc(db, 'users', result.user.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (!userDoc.exists()) {
+        await setDoc(userDocRef, {
+           email: result.user.email,
+           createdAt: new Date().toISOString(),
+           stature: 172,
+           chest: 88,
+           waist: 68,
+           hips: 94,
+           addresses: [],
+           paymentMethods: [],
+           role: (result.user.email === 'aerinotiazer@gmail.com' || result.user.email === 'beidoufadimatou1998@gmail.com') ? 'super_admin' : 'viewer'
+        });
+      }
+      setIsLoggedIn(true);
+      navigate(redirectTarget);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "Erreur de connexion via Google.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError("Veuillez saisir votre e-mail de membre et votre mot de passe.");
@@ -426,12 +513,41 @@ export function PageConnexion() {
     setError('');
     setLoading(true);
 
-    // Highly responsive, real-world style snappiness representing a high-scale authentic API request
-    setTimeout(() => {
+    try {
+      if (isRegisterMode) {
+        // Import Auth functions dynamically or assume they are available if we import them at the top
+        const { createUserWithEmailAndPassword } = await import('firebase/auth');
+        const { auth, db } = await import('./firebase');
+        const { doc, setDoc } = await import('firebase/firestore');
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+           email: userCredential.user.email,
+           createdAt: new Date().toISOString(),
+           stature: 172,
+           chest: 88,
+           waist: 68,
+           hips: 94,
+           addresses: [],
+           paymentMethods: [],
+           role: (userCredential.user.email === 'aerinotiazer@gmail.com' || userCredential.user.email === 'beidoufadimatou1998@gmail.com') ? 'super_admin' : 'viewer'
+        });
+      } else {
+        const { signInWithEmailAndPassword } = await import('firebase/auth');
+        const { auth } = await import('./firebase');
+        await signInWithEmailAndPassword(auth, email, password);
+      }
       setIsLoggedIn(true);
-      setLoading(false);
       navigate(redirectTarget);
-    }, 450);
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/operation-not-allowed') {
+        setError("L'authentification par e-mail n'est pas activée. Veuillez l'activer dans la console Firebase (Authentication > Sign-in method).");
+      } else {
+        setError(err.message || "Une erreur est survenue.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -576,13 +692,28 @@ export function PageConnexion() {
 
                   <button
                     type="button"
+                    onClick={handleGoogleLogin}
+                    className="w-full bg-white border border-neutral-200 hover:border-black text-black transition-all duration-300 py-4 text-[10px] uppercase tracking-[0.3em] font-bold select-none text-center flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                      <path d="M1 1h22v22H1z" fill="none"/>
+                    </svg>
+                    Continuer avec Google
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => {
                       setIsRegisterMode(!isRegisterMode);
                       setError('');
                     }}
-                    className="w-full border border-neutral-200 hover:border-black text-black transition-all duration-300 py-4 text-[10px] uppercase tracking-[0.3em] font-bold select-none text-center"
+                    className="w-full border-t border-neutral-100 hover:text-black text-neutral-400 transition-all duration-300 py-4 text-[10px] uppercase tracking-[0.3em] font-bold select-none text-center mt-4"
                   >
-                    {isRegisterMode ? "J'ai déjà un compte" : "Créer un compte Zaria"}
+                    {isRegisterMode ? "J'ai déjà un compte E-mail" : "Créer un compte E-mail"}
                   </button>
                 </div>
 
@@ -604,10 +735,10 @@ export function PageConnexion() {
 
 // --- PAGE COMPTE : MON ESPACE CLIENT ---
 export function PageMonCompte() {
-  const { isLoggedIn, setIsLoggedIn, globalProducts, formatPriceC, addToCart, setIsCartOpen } = useCart();
+  const { isLoggedIn, setIsLoggedIn, currentUserData, globalProducts, formatPriceC, addToCart, setIsCartOpen } = useCart();
   const navigate = useNavigate();
 
-  // Atelier measurement state
+  // Atelier measurement state (could sync with Firebase in a real scenario)
   const [stature, setStature] = useState(172);
   const [chest, setChest] = useState(88);
   const [waist, setWaist] = useState(68);
@@ -616,20 +747,24 @@ export function PageMonCompte() {
   const [bodyShapeAdvice, setBodyShapeAdvice] = useState<string | null>(null);
   const [isCalculated, setIsCalculated] = useState(false);
 
-  // Styling Appointments Scheduling state
-  const [stylingDate, setStylingDate] = useState('2026-06-18');
-  const [stylingTime, setStylingTime] = useState('14:30');
-  const [stylingExpert, setStylingExpert] = useState('Soline');
-  const [stylingBooked, setStylingBooked] = useState(false);
+  // Address and Payment States
+  const [addresses, setAddresses] = useState<any[]>(currentUserData?.addresses || []);
+  const [payments, setPayments] = useState<any[]>(currentUserData?.paymentMethods || []);
 
-  // Active view section tab
-  const [activeSubTab, setActiveSubTab] = useState<'profil' | 'atelier' | 'commandes'>('profil');
+  const [activeSubTab, setActiveSubTab] = useState<'adresses' | 'paiements' | 'atelier' | 'commandes'>('commandes');
 
   useEffect(() => {
     if (!isLoggedIn) {
       navigate('/connexion');
     }
   }, [isLoggedIn, navigate]);
+
+  useEffect(() => {
+    if (currentUserData) {
+      setAddresses(currentUserData.addresses || []);
+      setPayments(currentUserData.paymentMethods || []);
+    }
+  }, [currentUserData]);
 
   const handleCalculateSize = (e: React.FormEvent) => {
     e.preventDefault();
@@ -652,12 +787,12 @@ export function PageMonCompte() {
       setRecommendedSize(size);
       setBodyShapeAdvice(advice);
       setIsCalculated(false);
-    }, 450); // fast and snappy calculated size, realistic high performance
+    }, 450); 
   };
 
-  const handleStylingSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setStylingBooked(true);
+  const handleFastReorder = (orderId: string) => {
+    alert("Produits de la commande " + orderId + " réajoutés au panier.");
+    setIsCartOpen(true);
   };
 
   const vipRecommendations = useMemo(() => {
@@ -679,10 +814,16 @@ export function PageMonCompte() {
     );
   }
 
-  const getExpertJob = (name: string) => {
-    if (name === 'Soline') return 'Experte Conseillère Silhouette';
-    if (name === 'Nicolas') return 'Conseiller Mode Masculine';
-    return 'Conseiller Accessoires & Présentation';
+  const handleLogout = async () => {
+    try {
+      const { auth } = await import('./firebase');
+      const { signOut } = await import('firebase/auth');
+      await signOut(auth);
+      setIsLoggedIn(false);
+      navigate('/');
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
@@ -698,15 +839,22 @@ export function PageMonCompte() {
             </h1>
           </div>
           
-          <button 
-            onClick={() => {
-              setIsLoggedIn(false);
-              navigate('/');
-            }}
-            className="text-[10px] uppercase font-bold tracking-[0.25em] text-neutral-400 hover:text-black border-b border-transparent hover:border-black pb-0.5 transition-all flex items-center gap-1.5"
-          >
-            Se déconnecter <LogOut className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex gap-6 items-center">
+            {currentUserData && (currentUserData.role === 'super_admin' || currentUserData.role === 'admin' || currentUserData.role === 'SUPER_ADMIN' || currentUserData.role === 'ADMIN') && (
+              <button 
+                onClick={() => navigate('/admin')}
+                className="text-[10px] uppercase font-bold tracking-[0.25em] text-red-600 hover:text-red-800 border bg-red-50 border-red-200 px-4 py-2 hover:border-red-300 transition-all flex items-center gap-1.5"
+              >
+                Gérer l'application <ShieldAlert className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <button 
+              onClick={handleLogout}
+              className="text-[10px] uppercase font-bold tracking-[0.25em] text-neutral-400 hover:text-black border-b border-transparent hover:border-black pb-0.5 transition-all flex items-center gap-1.5"
+            >
+              Se déconnecter <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
         {/* Layout */}
@@ -716,20 +864,16 @@ export function PageMonCompte() {
           <div className="space-y-6">
             <div className="bg-neutral-50/70 border border-neutral-100 p-6 flex flex-col items-center text-center space-y-4">
               <div className="w-16 h-16 bg-neutral-100 border border-neutral-200 rounded-full text-black flex items-center justify-center font-display text-lg select-none font-medium">
-                ZC
+                {currentUserData?.email ? currentUserData.email.substring(0, 2).toUpperCase() : 'ZC'}
               </div>
               <div>
                 <h4 className="text-[11px] uppercase tracking-wider text-neutral-800 font-bold">Membre Client</h4>
-                <p className="text-[10px] font-mono text-neutral-400">ID Client : Z-2009-482</p>
+                <p className="text-[10px] font-mono text-neutral-400 truncate max-w-[150px]">{currentUserData?.email || 'Chargement...'}</p>
               </div>
               <div className="w-full pt-4 border-t border-neutral-200/50 space-y-2 text-left">
                 <div className="flex justify-between text-[9px] uppercase tracking-wider">
                   <span className="text-gray-400">Région :</span>
                   <span className="font-bold text-black font-mono">FRANCE</span>
-                </div>
-                <div className="flex justify-between text-[9px] uppercase tracking-wider">
-                  <span className="text-gray-400">Priorité :</span>
-                  <span className="font-bold text-neutral-800 font-mono">Standard</span>
                 </div>
               </div>
             </div>
@@ -737,22 +881,28 @@ export function PageMonCompte() {
             {/* Submenu tab navigation list */}
             <div className="flex flex-col border border-neutral-150">
               <button 
-                onClick={() => setActiveSubTab('profil')}
-                className={`py-4 px-6 text-left text-[10px] uppercase tracking-[0.2em] font-bold border-b border-neutral-100 transition-colors ${activeSubTab === 'profil' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-50 text-gray-500'}`}
+                onClick={() => setActiveSubTab('commandes')}
+                className={`py-4 px-6 text-left text-[10px] uppercase tracking-[0.2em] font-bold border-b border-neutral-100 transition-colors ${activeSubTab === 'commandes' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-50 text-gray-500'}`}
               >
-                1. Mon Profil & Conseils
+                Mes Commandes ({accountOrders.length})
+              </button>
+              <button 
+                onClick={() => setActiveSubTab('adresses')}
+                className={`py-4 px-6 text-left text-[10px] uppercase tracking-[0.2em] font-bold border-b border-neutral-100 transition-colors ${activeSubTab === 'adresses' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-50 text-gray-500'}`}
+              >
+                Mes Adresses de Livraison
+              </button>
+              <button 
+                onClick={() => setActiveSubTab('paiements')}
+                className={`py-4 px-6 text-left text-[10px] uppercase tracking-[0.2em] font-bold border-b border-neutral-100 transition-colors ${activeSubTab === 'paiements' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-50 text-gray-500'}`}
+              >
+                Informations de Paiement
               </button>
               <button 
                 onClick={() => setActiveSubTab('atelier')}
-                className={`py-4 px-6 text-left text-[10px] uppercase tracking-[0.2em] font-bold border-b border-neutral-100 transition-colors ${activeSubTab === 'atelier' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-50 text-gray-500'}`}
+                className={`py-4 px-6 text-left text-[10px] uppercase tracking-[0.2em] font-bold transition-colors ${activeSubTab === 'atelier' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-50 text-gray-500'}`}
               >
-                2. Mon Atelier de Mesure
-              </button>
-              <button 
-                onClick={() => setActiveSubTab('commandes')}
-                className={`py-4 px-6 text-left text-[10px] uppercase tracking-[0.2em] font-bold transition-colors ${activeSubTab === 'commandes' ? 'bg-black text-white' : 'bg-white hover:bg-neutral-50 text-gray-500'}`}
-              >
-                3. Mes Commandes ({accountOrders.length})
+                Mensurations Atelier
               </button>
             </div>
           </div>
@@ -760,45 +910,89 @@ export function PageMonCompte() {
           {/* Core Content Area */}
           <div className="lg:col-span-3">
             
-            {activeSubTab === 'profil' && (
-              <div className="space-y-12 animate-fade-in text-black">
-                
-                {/* Benefits */}
-                <div className="border border-neutral-200/50 bg-neutral-50/50 rounded-none p-6 sm:p-10 space-y-6">
-                  <h3 className="font-display text-lg uppercase tracking-[0.16em] font-semibold text-black mb-2">Vos avantages Membre Zaria</h3>
-                  <p className="text-xs text-gray-600 leading-relaxed uppercase tracking-wider">
-                    En tant que client enregistré de la Maison Zaria, vous bénéficiez de l'accès anticipé aux nouvelles collections de lin et de laine, de la possibilité de définir vos préférences de livraison et d'un support d'accompagnement pour vos mensurations d'atelier.
-                  </p>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
-                    <div className="bg-white p-4 border border-neutral-200/40 text-center space-y-1">
-                      <span className="text-[8px] tracking-widest uppercase font-mono text-neutral-400 block">LIVRAISON</span>
-                      <span className="text-[10px] tracking-widest uppercase text-black font-extrabold block">LIVRAISON FIABLE</span>
+            {activeSubTab === 'commandes' && (
+              <div className="space-y-8 animate-fade-in text-black">
+                <h3 className="font-display text-lg uppercase tracking-[0.16em] font-semibold text-black">Historique des commandes</h3>
+                <div className="space-y-6">
+                  {accountOrders.map(o => (
+                    <div key={o.id} className="border border-neutral-200 bg-white p-6">
+                      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-4 border-b border-neutral-100 pb-4">
+                        <div>
+                          <p className="font-mono text-xs text-neutral-500 uppercase">Commande {o.id}</p>
+                          <p className="text-[10px] font-bold mt-1 tracking-widest">{o.date}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-sm">{formatPriceC(o.total)}</p>
+                          <span className="inline-block mt-1 px-2 py-1 bg-neutral-100 text-[9px] uppercase font-bold tracking-widest text-neutral-600">{o.status}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-neutral-600 mb-6">{o.items}</p>
+                      <button onClick={() => handleFastReorder(o.id)} className="bg-black text-white px-6 py-2.5 text-[10px] uppercase font-bold tracking-[0.2em] hover:bg-neutral-800 transition-colors">
+                        Recommander les articles
+                      </button>
                     </div>
-                    <div className="bg-white p-4 border border-neutral-200/40 text-center space-y-1">
-                      <span className="text-[8px] tracking-widest uppercase font-mono text-neutral-400 block">SUPPORT</span>
-                      <span className="text-[10px] tracking-widest uppercase text-black font-extrabold block">SUPPORT COUTURE</span>
-                    </div>
-                    <div className="bg-white p-4 border border-neutral-200/40 text-center space-y-1">
-                      <span className="text-[8px] tracking-widest uppercase font-mono text-neutral-400 block">SERVICES</span>
-                      <span className="text-[10px] tracking-widest uppercase text-black font-extrabold block">SERVICES EN LIGNE</span>
-                    </div>
-                  </div>
+                  ))}
                 </div>
+              </div>
+            )}
 
+            {activeSubTab === 'adresses' && (
+              <div className="space-y-8 animate-fade-in text-black">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-display text-lg uppercase tracking-[0.16em] font-semibold text-black">Adresses de Livraison</h3>
+                  <button className="text-[10px] uppercase tracking-widest font-bold underline">Ajouter</button>
+                </div>
+                {addresses.length === 0 ? (
+                  <div className="p-8 border border-neutral-200 bg-neutral-50 text-center">
+                    <p className="text-xs uppercase tracking-widest text-neutral-500">Aucune adresse sauvegardée.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {addresses.map((addr: any, i: number) => (
+                       <div key={i} className="border border-neutral-200 p-4">
+                         <p className="font-bold text-xs uppercase mb-2">{addr.label || 'Maison'}</p>
+                         <p className="text-xs text-neutral-600">{addr.street}</p>
+                         <p className="text-xs text-neutral-600">{addr.city}</p>
+                       </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeSubTab === 'paiements' && (
+              <div className="space-y-8 animate-fade-in text-black">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-display text-lg uppercase tracking-[0.16em] font-semibold text-black">Moyens de Paiement</h3>
+                  <button className="text-[10px] uppercase tracking-widest font-bold underline">Ajouter</button>
+                </div>
+                {payments.length === 0 ? (
+                  <div className="p-8 border border-neutral-200 bg-neutral-50 text-center">
+                    <p className="text-xs uppercase tracking-widest text-neutral-500">Aucun moyen de paiement enregistré.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {payments.map((pay: any, i: number) => (
+                       <div key={i} className="border border-neutral-200 p-4 flex items-center justify-between">
+                         <div>
+                           <p className="font-bold text-xs uppercase mb-1">{pay.type}</p>
+                           <p className="text-xs text-neutral-600">**** **** **** {pay.last4}</p>
+                         </div>
+                       </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
             {activeSubTab === 'atelier' && (
               <div className="space-y-12 animate-fade-in text-black">
-                
-                {/* Atelier Info and interactive sizing calculators */}
                 <div className="border border-neutral-100 p-6 sm:p-10 space-y-6">
                   <h3 className="font-display text-lg uppercase tracking-[0.16em] font-semibold text-black">Mon Profil de Silhouette</h3>
                   <p className="text-xs text-gray-500 uppercase tracking-widest leading-relaxed">
-                    Saisissez vos mensurations corporelles d'essayage en cabine. Notre algorithme d'Atelier de Mesure Virtuel calcule avec rigueur votre taille adéquate dans la collection ZARIA et formule des conseils de style avisés pour équilibrer vos proportions de silhouettes.
+                    Saisissez vos mensurations corporelles d'essayage en cabine.
                   </p>
-
+                  {/* ... calculator form logic ... */}
                   <form onSubmit={handleCalculateSize} className="space-y-8 pt-4">
                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
                       
@@ -1012,7 +1206,7 @@ function Layout({ children }: { children: React.ReactNode }) {
     selectedPOS, setSelectedPOS, userCoords,
     selectedProduct, setSelectedProduct, lastAdded,
     editingCartItem, setEditingCartItem,
-    isLoggedIn, setIsLoggedIn, globalProducts
+    isLoggedIn, setIsLoggedIn, globalProducts, globalCategories
   } = useCart();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [activeDept, setActiveDept] = useState<'femme' | 'homme' | 'enfant'>('femme');
@@ -1055,7 +1249,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col min-h-screen pb-24 sm:pb-0 overflow-x-hidden">
       {/* MINIMAL NAV */}
-      <header className="sticky top-0 w-full z-40 bg-[#fafafa]/90 backdrop-blur-xl border-b border-black/5 transition-all">
+      <header className={`sticky top-0 w-full z-40 transition-all ${globalConfig?.enableLiquidGlass ? 'liquid-glass-navbar shadow-sm' : 'bg-[#fafafa]/90 backdrop-blur-xl border-b border-black/5'}`}>
         <div className="max-w-[1500px] mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
           <div className="flex items-center gap-4 sm:gap-8">
             <button className="text-black hover:opacity-50 transition-colors flex flex-col gap-[3px] items-start group lg:hidden" onClick={() => setIsMobileMenuOpen(true)}>
@@ -1271,29 +1465,24 @@ function Layout({ children }: { children: React.ReactNode }) {
                   <span className="block font-mono text-[9px] uppercase tracking-[0.3em] text-[#999]">Rayons / Collections</span>
                   
                   <div className="flex flex-col gap-6">
-                    {[
-                      { name: 'FEMME', categoryId: '1' },
-                      { name: 'HOMME', categoryId: '2' },
-                      { name: 'ENFANT', categoryId: '3' },
-                      { name: 'CHAUSSURES', categoryId: '4' },
-                      { name: 'ACCESSOIRES', categoryId: '5' },
-                      { name: 'PARFUM & COSMÉTIQUES', categoryId: '6' }
-                    ].map((dept, idx) => (
+                    {globalCategories.map((dept: any, idx: number) => {
+                      if (dept.id === 'all') return null;
+                      return (
                       <motion.div 
-                        key={dept.name}
+                        key={dept.id}
                         initial={{ x: -15, opacity: 0 }}
                         animate={{ x: 0, opacity: 1 }}
                         transition={{ delay: idx * 0.05, duration: 0.35 }}
                       >
                         <Link 
-                          to={`/collection?category=${dept.categoryId}`} 
+                          to={`/collection?category=${dept.id}`} 
                           onClick={() => setIsMobileMenuOpen(false)} 
-                          className="font-display text-3xl sm:text-4.5xl text-black font-light tracking-[0.08em] hover:text-neutral-500 hover:pl-2 transition-all block uppercase"
+                          className="font-display text-xl sm:text-2xl text-black font-medium tracking-wider hover:text-neutral-500 hover:pl-2 transition-all block uppercase"
                         >
                           {dept.name}
                         </Link>
                       </motion.div>
-                    ))}
+                    )})}
                   </div>
                 </div>
 
@@ -1758,7 +1947,7 @@ function PageHome() {
             Survolez ou cliquez sur les points lumineux de la silhouette pour révéler les pièces sélectionnées.
           </p>
 
-          {/* Connected Panel Displaying Selected Hotspot Item */}
+          {/* Connected Panel Displaying Selected Hotspot Item with Liquid Glass Styling */}
           <AnimatePresence mode="wait">
             {activeHotspotItem && (
               <motion.div
@@ -1766,17 +1955,20 @@ function PageHome() {
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 10 }}
-                className="bg-[#fafafa] p-6 flex gap-6 items-center relative overflow-visible"
+                className={`${globalConfig?.enableLiquidGlass ? 'liquid-glass-card shadow-xl' : 'bg-white/40 backdrop-blur-xl border border-white/40 shadow-xl'} p-6 flex gap-6 items-center relative overflow-visible rounded-2xl`}
               >
-                <div className="w-24 shrink-0 overflow-hidden shadow-xl drop-shadow-xl z-20">
-                  <img src={activeHotspotItem.image} alt={activeHotspotItem.name} className="w-full aspect-[3/4.5] object-cover scale-105" />
+                {/* Subtle colorful refraction circle background */}
+                <span className="absolute -top-12 -right-12 w-28 h-28 rounded-full bg-neutral-200/20 blur-2xl pointer-events-none" />
+                
+                <div className="w-24 shrink-0 overflow-hidden shadow-xl drop-shadow-xl z-20 rounded-lg">
+                  <img src={activeHotspotItem.image} alt={activeHotspotItem.name} className="w-full aspect-[3/4.5] object-cover scale-105" referrerPolicy="no-referrer" />
                 </div>
                 <div className="flex-1 space-y-2 min-w-0 z-10 pt-2 lg:pt-0">
-                  <span className="text-[9px] text-[#fafafa] bg-black px-2 py-0.5 tracking-[0.3em] font-mono uppercase inline-block mb-1">
+                  <span className="text-[9px] text-white bg-black/95 px-2.5 py-0.5 tracking-[0.3em] font-mono uppercase inline-block mb-1 rounded-md border border-white/10 shadow-sm">
                     {activeHotspot === 'haut' ? 'VESTE / HAUT' : activeHotspot === 'bas' ? 'BAS / PANTALON' : 'ACCESSOIRES'}
                   </span>
-                  <h4 className="text-xs sm:text-sm font-display uppercase tracking-widest text-black font-semibold truncate">{activeHotspotItem.name}</h4>
-                  <p className="text-[10px] font-sans tracking-widest text-gray-500">{formatPriceC(activeHotspotItem.price)}</p>
+                  <h4 className="text-xs sm:text-sm font-display uppercase tracking-widest text-black font-extrabold truncate">{activeHotspotItem.name}</h4>
+                  <p className="text-[10px] font-sans tracking-widest text-gray-500 font-bold">{formatPriceC(activeHotspotItem.price)}</p>
                   
                   <button
                     type="button"
@@ -1794,7 +1986,7 @@ function PageHome() {
                       addToCart(activeHotspotItem, 1, instructions, [], activeHotspotItem.price, options);
                       setIsCartOpen(true);
                     }}
-                    className="text-[9px] uppercase tracking-[0.2em] text-black border-b border-black pb-1 hover:text-gray-400 hover:border-gray-400 font-semibold pt-1 inline-block transition-all"
+                    className="text-[9px] uppercase tracking-[0.2em] text-black border-b border-black/80 pb-0.5 hover:text-gray-500 hover:border-gray-300 font-extrabold pt-1 inline-block transition-all"
                   >
                     AJOUTER AU PANIER
                   </button>
@@ -2014,7 +2206,7 @@ function PageHome() {
             </div>
 
             {/* Right details & quick buy panel */}
-            <div className="lg:col-span-3 bg-neutral-50 p-6 flex flex-col justify-between border border-gray-100 shadow-sm font-display">
+            <div className={`lg:col-span-3 p-6 flex flex-col justify-between font-display ${globalConfig?.enableLiquidGlass ? 'liquid-glass-card shadow-sm' : 'bg-neutral-50 border border-gray-100 shadow-sm'}`}>
               <div className="space-y-6">
                 <div className="border-b border-gray-200 pb-4">
                   <span className="text-[10px] uppercase tracking-widest text-[#a1a1a1] block mb-1">COMPOSITION SÉLECTIONNÉE</span>
@@ -2091,42 +2283,51 @@ function PageHome() {
 function PageCollection() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeCategory, setActiveCategory] = useState(searchParams.get('category') || 'all');
+  const [activeCollection, setActiveCollection] = useState(searchParams.get('collection') || 'all');
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   
   useEffect(() => {
     setActiveCategory(searchParams.get('category') || 'all');
+    setActiveCollection(searchParams.get('collection') || 'all');
     setSearchQuery(searchParams.get('search') || '');
   }, [searchParams]);
 
   const deferredSearchQuery = useDeferredValue(searchQuery);
   
-  const { globalProducts: products, globalCategories: categories, formatPriceC, globalConfig } = useCart();
+  const { globalProducts: products, globalCategories: categories, globalCollections, formatPriceC, globalConfig } = useCart();
   const isLoading = products.length === 0 && categories.length === 0;
 
   const filteredProducts = useMemo(() => {
     return products.filter((p: any) => p.isAvailable !== false).filter((p: any) => {
-      // Allow searching by finding search string as substring anywhere, but also need to filter category
-      // Wait, if BOTH search and category are provided, then AND them.
       let categoryMatch = activeCategory === 'all' ? true : p.categoryId === activeCategory;
+      let collectionMatch = activeCollection === 'all' ? true : p.collectionId === activeCollection;
       let searchMatch = true;
       if (deferredSearchQuery.trim() !== '') {
         const query = deferredSearchQuery.toLowerCase();
-        searchMatch = p.name.toLowerCase().includes(query) || p.description.toLowerCase().includes(query);
+        searchMatch = p.name.toLowerCase().includes(query) || (p.description && p.description.toLowerCase().includes(query));
       }
-      return categoryMatch && searchMatch;
+      return categoryMatch && collectionMatch && searchMatch;
     });
-  }, [products, deferredSearchQuery, activeCategory]);
+  }, [products, deferredSearchQuery, activeCategory, activeCollection]);
 
   const updateCategory = (cat: string) => {
     setActiveCategory(cat);
+    setActiveCollection('all');
     setSearchQuery('');
-    if (cat === 'all') {
-      searchParams.delete('category');
-    } else {
-      searchParams.set('category', cat);
-    }
-    searchParams.delete('search');
-    setSearchParams(searchParams);
+    
+    const newParams = new URLSearchParams();
+    if (cat !== 'all') newParams.set('category', cat);
+    setSearchParams(newParams);
+  };
+
+  const updateCollection = (col: string) => {
+    setActiveCollection(col);
+    setActiveCategory('all');
+    setSearchQuery('');
+    
+    const newParams = new URLSearchParams();
+    if (col !== 'all') newParams.set('collection', col);
+    setSearchParams(newParams);
   };
 
   const handleClearSearch = () => {
@@ -2144,6 +2345,7 @@ function PageCollection() {
             src={globalConfig?.collectionHeaderImage || "https://images.unsplash.com/photo-1539109136881-3be0616acf4b?w=1600&q=82"} 
             alt="Zaria Seasonal Catalog" 
             className="w-full h-full object-cover object-center filter brightness-[0.45] scale-100 transition-transform duration-[6000ms] hover:scale-105"
+            referrerPolicy="no-referrer"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-black/10"></div>
         </div>
@@ -2158,40 +2360,84 @@ function PageCollection() {
         </div>
       </div>
 
-      {/* Modern Filter & Search Bar Integration */}
-      <div className="sticky top-[64px] bg-white/95 backdrop-blur-md border-b border-gray-100 z-30 shadow-sm">
-        <div className="max-w-[1400px] mx-auto px-4 sm:px-8 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Modern Filter & Search Bar Integration with Liquid Glass components */}
+      <div className="sticky top-[64px] bg-white/95 backdrop-blur-md border-b border-gray-100 z-30 shadow-sm py-4">
+        <div className="max-w-[1400px] mx-auto px-4 sm:px-8 space-y-5">
           
-          {/* Scrollable Category Selection Tab Rail */}
-          <div className="flex overflow-x-auto hide-scrollbar gap-8 items-center py-1">
-            <button 
-              onClick={() => updateCategory('all')} 
-              className="relative text-[10px] uppercase tracking-[0.2em] font-bold pb-2 cursor-pointer transition-all shrink-0 select-none block"
-            >
-              <span className={activeCategory === 'all' && !searchQuery ? 'text-black' : 'text-gray-400 hover:text-gray-900'}>
-                Tous Les Modèles
-              </span>
-              {activeCategory === 'all' && !searchQuery && (
-                <motion.div layoutId="collectionActiveUnderline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-black" />
-              )}
-            </button>
-
-            {categories.map((cat: any) => (
+          {/* Section 1: Categories filter */}
+          <div className="flex flex-col gap-2">
+            <span className="text-[10px] tracking-[0.25em] text-gray-400 font-bold uppercase">Parcourir Par Style</span>
+            <div className="flex overflow-x-auto hide-scrollbar gap-8 items-center py-1 border-b border-gray-50">
               <button 
-                key={cat.id} 
-                onClick={() => updateCategory(cat.id)} 
+                onClick={() => updateCategory('all')} 
                 className="relative text-[10px] uppercase tracking-[0.2em] font-bold pb-2 cursor-pointer transition-all shrink-0 select-none block"
               >
-                <span className={activeCategory === cat.id && !searchQuery ? 'text-black' : 'text-gray-400 hover:text-gray-900'}>
-                  {cat.name}
+                <span className={activeCategory === 'all' && activeCollection === 'all' ? 'text-black' : 'text-gray-400 hover:text-gray-900'}>
+                  Tous Les Modèles
                 </span>
-                {activeCategory === cat.id && !searchQuery && (
-                  <motion.div layoutId="collectionActiveUnderline" className="absolute bottom-0 left-0 right-0 h-[2px] bg-black" />
+                {activeCategory === 'all' && activeCollection === 'all' && (
+                  <motion.div layoutId="collectionActiveUnderline" className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-black" />
                 )}
               </button>
-            ))}
+
+              {categories.map((cat: any) => (
+                <button 
+                  key={cat.id} 
+                  onClick={() => updateCategory(cat.id)} 
+                  className="relative text-[10px] uppercase tracking-[0.2em] font-bold pb-2 cursor-pointer transition-all shrink-0 select-none block"
+                >
+                  <span className={activeCategory === cat.id ? 'text-black font-black' : 'text-gray-400 hover:text-gray-900'}>
+                    {cat.name}
+                  </span>
+                  {activeCategory === cat.id && (
+                    <motion.div layoutId="collectionActiveUnderline" className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-black" />
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
-          
+
+          {/* Section 2: Collections capsules in majestic frosted Liquid Glass slider */}
+          {globalCollections && globalCollections.length > 0 && (
+            <div className="flex flex-col gap-2.5 pt-1">
+              <span className="text-[10px] tracking-[0.25em] text-gray-400 font-bold uppercase">Créations & Collections Thématiques</span>
+              <div className="flex overflow-x-auto hide-scrollbar gap-4 py-1 items-center">
+                {globalCollections.map((col: any) => {
+                  const isSelected = activeCollection === col.id;
+                  return (
+                    <button
+                      key={col.id}
+                      onClick={() => updateCollection(col.id)}
+                      className={`relative flex items-center gap-3 px-5 py-2.5 rounded-full overflow-hidden transition-all duration-300 border shrink-0 text-left cursor-pointer group shadow-sm ${
+                        isSelected
+                          ? 'border-black bg-black text-white scale-[1.02] shadow-md shadow-black/5'
+                          : 'border-neutral-200/60 bg-white/40 backdrop-blur-md text-neutral-800 hover:bg-white/80 hover:border-neutral-300'
+                      }`}
+                    >
+                      {/* Subtly colored glowing reflection inside selected collection (Liquid Glass) */}
+                      {isSelected && (
+                        <span className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent mix-blend-overlay pointer-events-none animate-pulse"></span>
+                      )}
+                      
+                      {col.image && (
+                        <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 border border-white/20">
+                          <img src={col.image} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                      )}
+                      
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase tracking-wider font-extrabold">{col.name}</span>
+                        {col.isFeatured && !isSelected && (
+                          <span className="text-[7.5px] text-amber-600 font-mono tracking-widest uppercase font-black">Édition Limitée</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
       
@@ -2387,7 +2633,7 @@ function PageBoutiques() {
 
 // --- PRODUCT CARD ---
 const ProductCard: React.FC<{ product: ProductInfo }> = ({ product }) => {
-  const { formatPriceC, addToCart, setIsCartOpen } = useCart();
+  const { formatPriceC, addToCart, setIsCartOpen, globalConfig } = useCart();
   const navigate = useNavigate();
   const [quickAddedSize, setQuickAddedSize] = useState<string | null>(null);
   const [isLiked, setIsLiked] = useState(false);
@@ -2445,9 +2691,15 @@ const ProductCard: React.FC<{ product: ProductInfo }> = ({ product }) => {
   return (
     <div 
       onClick={() => navigate(`/product/${product.id}`)} 
-      className="group cursor-pointer flex flex-col pt-4 overflow-hidden relative h-full select-none"
+      className={`group cursor-pointer flex flex-col overflow-hidden relative h-full select-none transition-all ${
+        globalConfig?.enableLiquidGlass 
+          ? 'liquid-glass-card p-3 rounded-2xl hover:scale-[1.01]' 
+          : 'pt-4 rounded-none'
+      }`}
     >
-      <div className="w-full relative aspect-[3/4] bg-neutral-50 overflow-hidden border border-neutral-100/30">
+      <div className={`w-full relative aspect-[3/4] bg-neutral-50 overflow-hidden border border-neutral-100/30 transition-all ${
+        globalConfig?.enableLiquidGlass ? 'rounded-xl' : 'rounded-none'
+      }`}>
         
         {/* Soft elegant image with premium luxury zoom transition */}
         <img 
